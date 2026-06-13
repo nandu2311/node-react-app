@@ -1,0 +1,104 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'backend/**' ]
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Copy backend to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Create backend directory if not exists
+            mkdir -p ~/backend
+            
+            # Copy backend files
+            cd ~/backend
+            rm -rf node_modules
+            rm -f .env
+            
+            # We'll use scp for files (see next step)
+            
+      - name: SCP backend files to EC2
+        uses: ministryofjustice/github-actions@scp
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: './backend/'
+          target: '~/backend/'
+      
+      - name: Setup backend on EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/backend
+            
+            # Install dependencies
+            npm install --production
+            
+            # Create .env file
+            cat > .env << ENVEOF
+            PORT=3000
+            NODE_ENV=production
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=5432
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            ENVEOF
+            
+            # Setup database (run once)
+            npm run setup-db || echo "Database already exists"
+            
+            # Stop existing process if running
+            cd ~/backend && pm2 stop backend || true
+            
+            # Start with PM2
+            pm2 start server.js --name backend
+            pm2 save
+            pm2 logs backend --lines 20 --nostream
+      
+      - name: Restart backend
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/backend
+            pm2 restart backend
+            pm2 logs backend --lines 10 --nostream
