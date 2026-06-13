@@ -23,7 +23,7 @@ const pool = new Pool({
 
 // Test database connection
 pool.on('connect', () => {
-  console.log('✓ Connected to PostgreSQL on RDS');
+  console.log('✓ Connected to PostgreSQL server on RDS');
 });
 
 pool.on('error', (err) => {
