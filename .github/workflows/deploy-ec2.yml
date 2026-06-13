@@ -50,7 +50,7 @@ jobs:
             # We'll use scp for files (see next step)
             
       - name: SCP backend files to EC2
-        uses: ministryofjustice/github-actions@scp
+        uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
