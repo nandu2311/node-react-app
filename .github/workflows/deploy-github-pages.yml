@@ -3,7 +3,7 @@ name: Deploy Frontend to GitHub Pages
 on:
   push:
     branches: [ master ]
-    paths: [ 'frontend/**' ]
+    #paths: [ 'frontend/**' ]
 
 permissions:
   contents: read
